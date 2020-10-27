@@ -211,6 +211,9 @@ int main(int argc, char *argv[] ){
     int num_particles=DEFAULT_NUM_PARTICLES;
     int iter=ITERATIONS;
     int k,i;
+    int counter = 0;
+    double previousHighest = 0;
+
     if (argc >=2) {
         population_size = atoi(argv[1]); //size population first command line argument
         if (argc>=4) {
@@ -239,6 +242,7 @@ int main(int argc, char *argv[] ){
         population[i].person=malloc(num_particles*sizeof(position));//allocate memory
 
     for (k=0; k<iter; k++){ //k is number of times whole simulation is run
+
         // populate with initial population
         printf("initializing population\n");
         int highest = initPopulation(population,population_size,x_max,y_max,num_particles);
@@ -252,6 +256,16 @@ int main(int argc, char *argv[] ){
             highest=breeding(&population, highest, population_size,x_max,y_max,num_particles);
             gen+=1;
         }
+
+        //stop iteration if no improvement within 5 iterations
+        if (population[highest].fitness <= previousHighest){
+            counter++;
+        }
+        else if (population[highest].fitness > previousHighest) {
+            previousHighest = population[highest].fitness;
+            counter = 0;
+        }
+
         printf("# generations= %d \n", gen);
         printf("Best solution:\n");
         printbox(population[highest],num_particles);
@@ -263,6 +277,12 @@ int main(int argc, char *argv[] ){
         printboxFile(population[highest],f,num_particles);
         printf("---------");
         gen_count+=gen;
+
+        // break loop if theres no improvement within 5 iterations
+        if (counter == 5){
+            break;
+        }
+
     }
     fclose(f);
 
@@ -277,4 +297,3 @@ int main(int argc, char *argv[] ){
     printf("Average generations: %f\n", (double)gen_count/(double)k);
     return 0;
 }
-
