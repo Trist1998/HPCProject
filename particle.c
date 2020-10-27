@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <time.h>
 
 
 #define DEFAULT_POP_SIZE 300 //bigger population is more costly
@@ -229,6 +230,10 @@ int main(int argc, char *argv[] ){
     fprintf(f,"%d,%d\n",x_max,y_max); //write box dimensions as first line of file
     box_pattern * population;
 
+    clock_t start, end;
+    double cpu_time_used;
+    start = clock();
+
     population = (box_pattern*) malloc(sizeof(box_pattern)*population_size); //allocate memory
     for(i=0;i<population_size;i++)
         population[i].person=malloc(num_particles*sizeof(position));//allocate memory
@@ -264,6 +269,10 @@ int main(int argc, char *argv[] ){
     for(i=0;i<population_size;i++)
         free(population[i].person); //release memory
     free(population); //release memory
+
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Time taken: %f\n", cpu_time_used);
 
     printf("Average generations: %f\n", (double)gen_count/(double)k);
     return 0;
