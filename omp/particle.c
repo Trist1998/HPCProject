@@ -2,12 +2,14 @@
  * Genetic algorithm for 2D Lennard Jones particle simulation
  * M. Kuttel October 2020
  */
+
 #include <omp.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
+
 
 
 #define DEFAULT_POP_SIZE 300 //bigger population is more costly
@@ -76,11 +78,13 @@ double calcFitness(box_pattern box,int num_particles){
 int initPopulation(box_pattern * box, int population_size,int xmax,int ymax,int num_particles)
 {
     int highest = 0;
+#if defined(_OPENMP)
+    srand(omp_get_thread_num());
+#endif
     for (int p=0;p<population_size;p++) {
         for (int i=0; i<num_particles; i++){
             box[p].person[i].x_pos=(rand()%(xmax + 1));
             box[p].person[i].y_pos=(rand()%(ymax + 1));
-
         }
         box[p].fitness=calcFitness(box[p],num_particles);
         if (box[p].fitness > box[highest].fitness)
@@ -129,8 +133,8 @@ int breeding(box_pattern ** populationPtr, int highestParent, int population_siz
 
     for(i=0;i<population_size;i++)
         new_generation[i].person=malloc(num_particles*sizeof(position));
-    printf("Hello 1\n");
 
+    #pragma omp parallel for
     for (i=0; i<population_size; i+=2){ //two children
 
         // Determine breeding pair, with tournament of 2 (joust)
@@ -163,7 +167,7 @@ int breeding(box_pattern ** populationPtr, int highestParent, int population_siz
         }
 
     }
-    printf("Hello 2\n");
+
     //find maximum parent fitness to keep and minimum new generation to throw away
     new_generation[0].fitness=calcFitness(new_generation[0],num_particles);
     double min_fitness=new_generation[0].fitness;
@@ -185,7 +189,7 @@ int breeding(box_pattern ** populationPtr, int highestParent, int population_siz
             highest=i;
         }
     }
-    printf("Hello 3\n");
+
     // printf("max fitness should be: %f\n",max_parent.fitness);
     //copies
     copybox(&new_generation[min_box],&max_parent,num_particles);
@@ -210,7 +214,7 @@ int main(int argc, char *argv[] ){
     int y_max=Y_DEFAULT;
     int num_particles=DEFAULT_NUM_PARTICLES;
     int iter=ITERATIONS;
-    int k,i;
+
     if (argc >=2) {
         population_size = atoi(argv[1]); //size population first command line argument
         if (argc>=4) {
@@ -229,22 +233,25 @@ int main(int argc, char *argv[] ){
     printf("Writing dimensions to file\n");
     fprintf(f,"%d,%d\n",x_max,y_max); //write box dimensions as first line of file
 
+
     clock_t start, end;
     double cpu_time_used;
     start = clock();
 
-    box_pattern * population;
-    #pragma omp parallel for private(population) ordered
-    for (k=0; k<iter; k++){ //k is number of times whole simulation is run
 
+
+    #pragma omp parallel for ordered
+    for (int k=0; k<iter; k++){ //k is number of times whole simulation is run
+        box_pattern * population;
         population = (box_pattern*) malloc(sizeof(box_pattern)*population_size); //allocate memory
-
-        for(i=0;i<population_size;i++)
+        for(int i=0;i<population_size;i++)
             population[i].person=malloc(num_particles*sizeof(position));//allocate memory
+        int counter = 0;
+        double previousHighest = 0;
         // populate with initial population
         printf("initializing population\n");
         int highest = initPopulation(population,population_size,x_max,y_max,num_particles);
-        printf("=========%d\n", k);
+
 
         double max_fitness=0;
         // main loop
@@ -253,32 +260,46 @@ int main(int argc, char *argv[] ){
         while (gen<MAX_GEN){
             highest=breeding(&population, highest, population_size,x_max,y_max,num_particles);
             gen+=1;
+            //stop iteration if no improvement within 5 iterations
+            if (population[highest].fitness <= previousHighest){
+                counter++;
+            }
+            else if (population[highest].fitness > previousHighest) {
+                previousHighest = population[highest].fitness;
+                counter = 0;
+            }
+            // break loop if theres no improvement within 5 iterations
+            if (counter == 200){
+                break;
+            }
         }
+
         #pragma omp ordered
         {
+            printf("=========%d\n", k);
             printf("# generations= %d \n", gen);
             printf("Best solution:\n");
-            printbox(population[highest],num_particles);
-            if (f == NULL)
-            {
+            printbox(population[highest], num_particles);
+            if (f == NULL) {
                 printf("Error opening file!\n");
                 exit(1);
             }
-                printboxFile(population[highest], f, num_particles);
-                printf("---------");
+            printboxFile(population[highest], f, num_particles);
+            printf("---------\n");
         }
         gen_count+=gen;
-        for(i=0;i<population_size;i++)
+        for(int i=0;i<population_size;i++)
             free(population[i].person); //release memory
         free(population); //release memory
     }
     fclose(f);
 
+
+
     end = clock();
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
     printf("Time taken: %f\n", cpu_time_used);
 
-
-    printf("Average generations: %f\n", (double)gen_count/(double)k);
+    printf("Average generations: %f\n", (double)gen_count/(double)iter);
     return 0;
 }

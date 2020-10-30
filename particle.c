@@ -76,9 +76,10 @@ double calcFitness(box_pattern box,int num_particles){
 int initPopulation(box_pattern * box, int population_size,int xmax,int ymax,int num_particles)
 {
     int highest = 0;
-#pragma omp parallel for
+    srand(clock());
     for (int p=0;p<population_size;p++) {
         for (int i=0; i<num_particles; i++){
+
             box[p].person[i].x_pos=(rand()%(xmax + 1));
             box[p].person[i].y_pos=(rand()%(ymax + 1));
 
@@ -211,8 +212,6 @@ int main(int argc, char *argv[] ){
     int num_particles=DEFAULT_NUM_PARTICLES;
     int iter=ITERATIONS;
     int k,i;
-    int counter = 0;
-    double previousHighest = 0;
 
     if (argc >=2) {
         population_size = atoi(argv[1]); //size population first command line argument
@@ -242,7 +241,8 @@ int main(int argc, char *argv[] ){
         population[i].person=malloc(num_particles*sizeof(position));//allocate memory
 
     for (k=0; k<iter; k++){ //k is number of times whole simulation is run
-
+        int counter = 0;
+        double previousHighest = 0;
         // populate with initial population
         printf("initializing population\n");
         int highest = initPopulation(population,population_size,x_max,y_max,num_particles);
@@ -255,16 +255,21 @@ int main(int argc, char *argv[] ){
         while (gen<MAX_GEN){
             highest=breeding(&population, highest, population_size,x_max,y_max,num_particles);
             gen+=1;
+            //stop iteration if no improvement within 5 iterations
+            if (population[highest].fitness <= previousHighest){
+                counter++;
+            }
+            else if (population[highest].fitness > previousHighest) {
+                previousHighest = population[highest].fitness;
+                counter = 0;
+            }
+            // break loop if theres no improvement within 5 iterations
+            if (counter == 250){
+                break;
+            }
         }
 
-        //stop iteration if no improvement within 5 iterations
-        if (population[highest].fitness <= previousHighest){
-            counter++;
-        }
-        else if (population[highest].fitness > previousHighest) {
-            previousHighest = population[highest].fitness;
-            counter = 0;
-        }
+
 
         printf("# generations= %d \n", gen);
         printf("Best solution:\n");
@@ -277,11 +282,6 @@ int main(int argc, char *argv[] ){
         printboxFile(population[highest],f,num_particles);
         printf("---------");
         gen_count+=gen;
-
-        // break loop if theres no improvement within 5 iterations
-        if (counter == 5){
-            break;
-        }
 
     }
     fclose(f);
